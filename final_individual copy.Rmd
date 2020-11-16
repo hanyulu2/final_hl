@@ -1,0 +1,93 @@
+---
+title: "individual_final"
+author: "jiaying Ning"
+date: "11/9/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#loading package
+library(tidyverse)
+library(readxl)
+library(janitor)
+library(dplyr)
+library(ggridges)
+library(usdata)
+library(usmap)
+library(ggplot2)
+library(patchwork)
+
+library(plotly)
+
+knitr::opts_chunk$set(
+  fig.width = 6,
+    fig.asp = .6,
+  out.width = "90%"
+
+)
+
+theme_set(theme_minimal()+theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_color_discrete = scale_color_viridis_d
+scale_fill_discrete =scale_fill_viridis_d
+```
+
+
+
+#### introducing first dataset "covid_impact_on_airport_traffic"
+```{r}
+#import data for covid_impact_on_airport_traffic
+#Main Problem: join data, have date and state match for both data
+# Transportation and Covid have different way to representing date(2020-01-01 in transportation date and 01/01/2020 in Covid data)
+transportation = 
+   read_csv("./data/covid_impact_on_airport_traffic.csv" ) %>%
+  janitor::clean_names() %>%
+  filter(country != "Australia" & country != "Chile" & country != "Canada") %>% #only leave United States data 
+   separate(date, c("year","month","day"), sep = "([-])") %>%  # I re-arrange the date information so that it matched the date format in Covid data
+    mutate(date = paste(month,day,year,sep = "/")) %>% # I re-arrange the date information so that it matched the date format in Covid data
+  relocate(date) %>% 
+  select(-year,-month,-day,-version,-aggregation_method,-state,-country) %>% #delete variable that is not in our interest
+    rename(state = iso_3166_2) %>% #rename state variable so that we can combine two data 
+  mutate(state=gsub("US-","",state)) # reformat state variable, delete prefix of US-
+
+
+
+```
+
+#### introducing first dataset "United_States_Covid-19_Cases_and_Deaths_by_State_over_Time"
+```{r}
+Covid =  
+  read_csv("./data/United_States_COVID-19_Cases_and_Deaths_by_State_over_Time.csv" ) %>%
+  janitor::clean_names() %>%
+  filter(consent_cases == "Agree" | consent_deaths == "Agree")%>% #need to decided whether this step is necessary
+  select("submission_date":"pnew_death") %>% #select variable of interest, need to look further into which variable we are interested in and way
+    rename(date = submission_date)  # rename date variable so that we can match data accordingly
+  
+```
+
+#### Joining two dataset
+```{r}
+
+Covid_transport_data = 
+  left_join(transportation, Covid, by = c("date")) %>% #left join two data, by date
+  filter(state.y == state.x) #filter the data so that we only leave the data that have matching date and state
+  
+```
+
+```{r}
+transport_state = 
+  Covid_transport_data %>% 
+  mutate(centroid=gsub("POINT\\D","",centroid)) %>% 
+  separate(centroid, into = c("long", "lat"), sep = 17) %>% 
+  mutate(across(where(is.character), str_trim)) %>% 
+  group_by (airport_name, long, lat, state.x) %>% 
+  summarize(
+    mean_percent_base = mean(percent_of_baseline)
+    )
+```
+
