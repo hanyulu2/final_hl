@@ -1,6 +1,6 @@
 ---
-title: "individual_final"
-author: "jiaying Ning"
+title: "final"
+author: "Hanyu Lu"
 date: "11/9/2020"
 output: html_document
 ---
@@ -16,7 +16,7 @@ library(usdata)
 library(usmap)
 library(ggplot2)
 library(patchwork)
-
+library(leaflet)
 library(plotly)
 
 knitr::opts_chunk$set(
@@ -80,6 +80,58 @@ Covid_transport_data =
 ```
 
 ```{r}
+case_state = 
+  Covid_transport_data %>% 
+  mutate(centroid=gsub("POINT\\D","",centroid)) %>% 
+  separate(centroid, into = c("long", "lat"), sep = 17) %>% 
+  mutate(across(where(is.character), str_trim)) %>% 
+  group_by (airport_name, long, lat, state.x) %>% 
+  summarize(
+    total_cases = max(tot_cases)
+    ) %>% 
+  mutate(long = round(as.double(long),digits = 0),
+         lat = round(as.double(str_remove(lat,"\\)"))),digits = 2
+         )
+```
+
+
+
+```{r}
+
+mybins <- seq(80000, 380000, by=50000)
+mypalette <- colorBin( palette="magma", domain=case_state$total_cases,  bins=mybins)
+
+```
+
+```{r}
+mytext = paste(
+   "Longitude: ", case_state$long, 
+   "Latitude: ", case_state$lat, 
+   "Total Cases: ", case_state$total_cases) %>%
+  lapply(htmltools::HTML)
+```
+
+```{r}
+n <- leaflet(case_state) %>% 
+  addTiles()  %>% 
+  addProviderTiles("CartoDB.Positron") %>%
+  addCircleMarkers(~long, ~lat, 
+    fillColor = ~mypalette(total_cases),
+    fillOpacity = 0.7, 
+    color="white", 
+    radius = ~ sqrt(total_cases/8000)*7,
+    stroke = FALSE, 
+    label = mytext,
+    labelOptions = labelOptions( style = list("font-weight" = "normal", padding = "3px 8px"), textsize = "13px", direction = "auto")
+  ) %>%
+  addLegend( pal= mypalette, values=~total_cases, opacity=1, title = "Total cases", position = "bottomright" )
+  
+n
+
+```
+
+
+```{r}
 transport_state = 
   Covid_transport_data %>% 
   mutate(centroid=gsub("POINT\\D","",centroid)) %>% 
@@ -88,6 +140,45 @@ transport_state =
   group_by (airport_name, long, lat, state.x) %>% 
   summarize(
     mean_percent_base = mean(percent_of_baseline)
-    )
+    ) %>% 
+  mutate(long = round(as.double(long),digits = 0),
+         lat = round(as.double(str_remove(lat,"\\)"))),digits = 2,
+         mean_percent_base = round(mean_percent_base, digits = 2))
+
+
+```
+
+```{r}
+
+mybins <- seq(40, 90, by=10)
+mypalette <- colorBin( palette="magma", domain=transport_state$mean_percent_base,  bins=mybins)
+
+```
+
+```{r}
+mytext = paste(
+   "Longitude: ", transport_state$long, 
+   "Latitude: ", transport_state$lat, 
+   "Percent of baseline: ", transport_state$mean_percent_base) %>%
+  lapply(htmltools::HTML)
+```
+
+```{r}
+m <- leaflet(transport_state) %>% 
+  addTiles()  %>% 
+  addProviderTiles("CartoDB.Positron") %>%
+  addCircleMarkers(~long, ~lat, 
+    fillColor = ~mypalette(mean_percent_base),
+    fillOpacity = 0.7, 
+    color="white", 
+    radius = ~ sqrt(mean_percent_base)*4,
+    stroke = FALSE, 
+    label = mytext,
+    labelOptions = labelOptions( style = list("font-weight" = "normal", padding = "3px 8px"), textsize = "13px", direction = "auto")
+  ) %>%
+  addLegend( pal= mypalette, values=~mean_percent_base, opacity=1, title = "Percent of baseline", position = "bottomright" )
+  
+m
+
 ```
 
